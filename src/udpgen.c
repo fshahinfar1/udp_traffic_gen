@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include <getopt.h>
+
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -22,7 +24,7 @@
 
 struct arguments {
 	int target_port;
-	char target_addr[32];
+	char *target_addr;
 	int rate;
 	int max_pending;
 	int threads;
@@ -51,14 +53,80 @@ struct request {
 	unsigned int payload_length;
 } __attribute__((__packed__));
 
+static void usage()
+{
+	INFO("Usage:\n"
+		"* --help     -h: show this message\n"
+		"* --port     -p: set the server port     (8080)\n"
+		"* --ip       -i: set the server ip addr  (127.0.0.1)\n"
+		/* "* --rate  -R: set target request rate\n" */
+		"* --pending  -P: set maximum number of pending \n"
+		"                 request for each thread (4)\n"
+		"* --thread   -t: set number of threads   (1)\n"
+		"* --duration -d: set experiment duration (10)\n"
+	);
+}
+
 static int parse_args(int argc, char *argv[])
 {
+	int ret;
+
+	struct option long_opts[] = {
+		{"help",     no_argument,       NULL, 'h'},
+		{"port",     required_argument, NULL, 'p'},
+		{"ip",       required_argument, NULL, 'i'},
+		{"rate",     required_argument, NULL, 'R'},
+		{"pendign",  required_argument, NULL, 'P'},
+		{"thread",   required_argument, NULL, 't'},
+		{"duration", required_argument, NULL, 'd'},
+		/* End of option list ------------------- */
+		{NULL, 0, NULL, 0},
+	};
+
+	/* Default values */
 	args.target_port = 8080;
-	strcpy(args.target_addr, "192.168.122.20");
-	args.rate = 20000; /* Req / sec */
-	args.max_pending = 6;
+	args.target_addr = "127.0.0.1";
+	args.rate = 1000; /* Req / sec */
+	args.max_pending = 4;
 	args.threads = 1;
-	args.duration = 5; /* seconds */
+	args.duration = 10; /* seconds */
+
+	while(1) {
+		ret = getopt_long(argc, argv, "hp:i:R:P:t:d:", long_opts, NULL);
+		if (ret == -1)
+			break;
+		switch (ret) {
+			case 'p':
+				args.target_port = atoi(optarg);
+				break;
+			case 'i':
+				args.target_addr = optarg;
+				break;
+			case 'R':
+				args.rate = atoi(optarg);
+				break;
+			case 'P':
+				args.max_pending = atoi(optarg);
+				break;
+			case 't':
+				args.threads = atoi(optarg);
+				break;
+			case 'd':
+				args.duration = atoi(optarg);
+				break;
+			case 'h':
+				usage();
+				return 1;
+			default:
+				usage();
+				ERROR("Unknown argument '%s'!\n", argv[optind-1]);
+				return 1;
+		}
+	}
+
+	INFO("Experiment for %d sec.    Server %s:%d\n", args.duration,
+			args.target_addr, args.target_port);
+
 	return 0;
 }
 
@@ -297,6 +365,7 @@ int main(int argc, char *argv[])
 	}
 	INFO("total: %d\n", total);
 	INFO("duration: %d\n", args.duration);
+	INFO("throughput: %.2f\n", (double)total / (double)args.duration);
 
 	return 0;
 
