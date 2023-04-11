@@ -139,7 +139,7 @@ static int prepare_request(void *buf, int len)
 
 	/* TODO: make this configurable */
 	/* NOTE: Hard coded protocl */
-	header->req_type = 1;
+	header->req_type = 2;
 	header->payload_length = PAYLOAD_SIZE;
 	memcpy(payload, PAYLOAD, PAYLOAD_SIZE);
 
@@ -149,6 +149,7 @@ static int prepare_request(void *buf, int len)
 
 static int end_of_response(char *buf, unsigned int len)
 {
+	/* printf("%s\n", buf); */
 	if (buf[len-5] == 'E' && buf[len-4] == 'N' && buf[len-3] == 'D' && buf[len-2] == '\r' && buf[len-1] == '\n') {
 		return 1;
 	}
@@ -271,6 +272,7 @@ void *worker_entry(void *_arg)
 					}
 					continue;
 				}
+				/* buf[ret] = '\0'; */
 				if (end_of_response(buf, ret)) {
 					/* Send a new request */
 					prepare_for_new_req(wrk, &poll_list[0]);
