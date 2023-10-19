@@ -29,6 +29,7 @@ struct arguments {
 	int max_pending;
 	int threads;
 	int duration;
+	char one_dir;
 };
 
 struct worker {
@@ -36,7 +37,8 @@ struct worker {
 	int sock_fd;
 	volatile int run;
 	int rate;
-	long long int requests;
+	long long int recv; /* responses received from server */
+	long long int sent;     /* messages sent */
 
 	int pending;
 
@@ -64,6 +66,7 @@ static void usage()
 		"                 request for each thread (4)\n"
 		"* --thread   -t: set number of threads   (1)\n"
 		"* --duration -d: set experiment duration (10)\n"
+		"* --one        : run experiment in one direction\n"
 	);
 }
 
@@ -79,6 +82,7 @@ static int parse_args(int argc, char *argv[])
 		{"pendign",  required_argument, NULL, 'P'},
 		{"thread",   required_argument, NULL, 't'},
 		{"duration", required_argument, NULL, 'd'},
+		{"one",      no_argument,       NULL, 129},
 		/* End of option list ------------------- */
 		{NULL, 0, NULL, 0},
 	};
@@ -90,6 +94,7 @@ static int parse_args(int argc, char *argv[])
 	args.max_pending = 4;
 	args.threads = 1;
 	args.duration = 10; /* seconds */
+	args.one_dir = 0;
 
 	while(1) {
 		ret = getopt_long(argc, argv, "hp:i:R:P:t:d:", long_opts, NULL);
@@ -104,6 +109,8 @@ static int parse_args(int argc, char *argv[])
 				break;
 			case 'R':
 				args.rate = atoi(optarg);
+				ERROR("Rate limiting has not implemented yet!\n");
+				exit(EXIT_FAILURE);
 				break;
 			case 'P':
 				args.max_pending = atoi(optarg);
@@ -113,6 +120,10 @@ static int parse_args(int argc, char *argv[])
 				break;
 			case 'd':
 				args.duration = atoi(optarg);
+				break;
+			case 129:
+				INFO("Uni-direction Experiment: Client do not wait for response from server!\n");
+				args.one_dir = 1;
 				break;
 			case 'h':
 				usage();
@@ -192,7 +203,8 @@ void *worker_entry(void *_arg)
 	}
 	wrk->bufsize = BUFSIZE;
 
-	wrk->requests = 0;
+	wrk->recv = 0;
+	wrk->sent = 0;
 	wrk->pending = 0;
 
 	/* Send a new request */
@@ -245,7 +257,8 @@ void *worker_entry(void *_arg)
 
 				if (wrk->remaining == 0) {
 					wrk->pending++;
-					if (wrk->pending >= args.max_pending) {
+					wrk->sent++;
+					if (!args.one_dir && wrk->pending >= args.max_pending) {
 						/* Do not send */
 						poll_list[i].events = POLLIN;
 					} else {
@@ -277,11 +290,10 @@ void *worker_entry(void *_arg)
 					/* Send a new request */
 					prepare_for_new_req(wrk, &poll_list[0]);
 					wrk->pending--;
-					wrk->requests++;
+					wrk->recv++;
 				}
 			}
 		}
-
 	}
 
 	close(fd);
@@ -360,14 +372,19 @@ int main(int argc, char *argv[])
 		pthread_join(workers[i].thread, NULL);
 	}
 
-	int total = 0;
+	int total_recv = 0;
+	int total_sent = 0;
+	printf("          RECV        SENT\n");
 	for (i = 0; i < args.threads; i++) {
-		total += workers[i].requests;
-		INFO("thread %d: %d\n", i, workers[i].requests);
+		total_recv += workers[i].recv;
+		total_sent += workers[i].sent;
+		INFO("thread %d: %d        %d\n", i, workers[i].recv, workers[i].sent);
 	}
-	INFO("total: %d\n", total);
+	INFO("total recv: %d\n", total_recv);
+	INFO("total sent: %d\n", total_sent);
 	INFO("duration: %d\n", args.duration);
-	INFO("throughput: %.2f\n", (double)total / (double)args.duration);
+	INFO("Recv Throughput: %.2f\n", (double)total_recv / (double)args.duration);
+	INFO("Sent Throughput: %.2f\n", (double)total_sent / (double)args.duration);
 
 	return 0;
 
