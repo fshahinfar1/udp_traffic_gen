@@ -161,6 +161,7 @@ static int prepare_request(void *buf, int len)
 static int end_of_response(char *buf, unsigned int len)
 {
 	/* printf("%s\n", buf); */
+	if (len < 5) return 0;
 	if (buf[len-5] == 'E' && buf[len-4] == 'N' && buf[len-3] == 'D' && buf[len-2] == '\r' && buf[len-1] == '\n') {
 		return 1;
 	}
