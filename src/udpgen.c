@@ -22,6 +22,8 @@
 #define BUFSIZE 1024
 #define TIMOUT_INTERVAL 2000
 
+#define SEND_TCP_TRAFFIC
+
 struct arguments {
 	int target_port;
 	char *target_addr;
@@ -175,6 +177,70 @@ static inline void prepare_for_new_req(struct worker *wrk, struct pollfd * pfd)
 	wrk->written = 0;
 }
 
+#ifdef SEND_TCP_TRAFFIC
+static int worker_connect_to_server(struct sockaddr_in *server_addr,
+		socklen_t addr_len, int fd)
+{
+	int ret;
+	struct pollfd poll_list[2];
+	int num_events;
+	int num_sockets;
+	int tmp_opt;
+
+	num_sockets = 1;
+	poll_list[0].fd = fd;
+	poll_list[0].events = POLLOUT | POLLIN;
+
+	ret = connect(fd, (struct sockaddr *)server_addr, addr_len);
+	if (ret == 0) {
+		/* Connected */
+		return 0;
+	}
+	if (errno != EINPROGRESS) {
+		ERROR("TCP: Failed to connect to the server\n");
+		perror("What:\n");
+		return -1;
+	}
+	/* Non-blocking. Wait for it to connect. */
+	ret = EINPROGRESS;
+	while (ret != 0) {
+		printf("Waiting to connect\n");
+		poll_list[0].events = POLLOUT;
+		num_events = poll(poll_list, num_sockets, -1);
+		if (num_events < 1) {
+			continue;
+		}
+		if (poll_list[0].revents == 0) {
+			continue;
+		}
+		if ((poll_list[0].revents & POLLOUT) == 0) {
+			DEBUG("unexpected revent is not zero but it is not ready for writing?! %d\n", poll_list[1].revents);
+			continue;
+		}
+		tmp_opt = -1;
+		socklen_t tmp_opt_len = sizeof(tmp_opt);
+		getsockopt(fd, SOL_SOCKET, SO_ERROR, &tmp_opt, &tmp_opt_len);
+		switch(tmp_opt) {
+			case 0:
+				/* Connected */
+				return 0;
+				break;
+			case EINPROGRESS:
+				ret = EINPROGRESS;
+				continue;
+				break;
+			default:
+				ERROR("Unexpected error value on the socket: %d\n", tmp_opt);
+				errno = tmp_opt;
+				perror("What:\n");
+				return -1;
+				break;
+		}
+	}
+	return 0; /* Now we are connect to the server */
+}
+#endif
+
 void *worker_entry(void *_arg)
 {
 	int ret;
@@ -183,7 +249,7 @@ void *worker_entry(void *_arg)
 	int fd = wrk->sock_fd;
 	char *buf;
 	struct sockaddr_in server_addr;
-	socklen_t addr_len;
+	socklen_t addr_len = sizeof(server_addr);
 
 	struct pollfd poll_list[2];
 	int num_events;
@@ -196,6 +262,13 @@ void *worker_entry(void *_arg)
 	server_addr.sin_family = AF_INET;
 	inet_pton(AF_INET, args.target_addr, &server_addr.sin_addr);
 	server_addr.sin_port = htons(args.target_port);
+
+#ifdef SEND_TCP_TRAFFIC
+	ret = worker_connect_to_server(&server_addr, addr_len, fd);
+	if (ret != 0) {
+		goto err;
+	}
+#endif
 
 	buf = wrk->buf = malloc(BUFSIZE);
 	if (!buf) {
@@ -282,6 +355,7 @@ void *worker_entry(void *_arg)
 				if (ret < 0) {
 					if (errno != EWOULDBLOCK) {
 						ERROR("Unexpected return value when reading the socket");
+						perror("What:");
 						goto err;
 					}
 					continue;
@@ -312,7 +386,11 @@ static int launch_worker(struct worker *wrk)
 	int sk_fd;
 	struct sockaddr_in sk_addr;
 
+#ifdef SEND_TCP_TRAFFIC
+	sk_fd = socket(AF_INET, SOCK_STREAM, 0);
+#else
 	sk_fd = socket(AF_INET, SOCK_DGRAM, 0);
+#endif
 	if (sk_fd < 1) {
 		ERROR("Failed to open a socket!\n");
 		return 1;
