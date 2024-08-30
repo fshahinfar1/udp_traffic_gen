@@ -144,8 +144,10 @@ static int parse_args(int argc, char *argv[])
 }
 
 /* #define PAYLOAD "hello world this is a messageZ\n" */
+//
+#define PAYLOAD "dvfhshtkqtyuuujawsufsn\r\n"
 // 64
-#define PAYLOAD "duafmnhwvfhshtkqtyuuujawsufsngvnopyvesdyvaoifzbviwrglaonrxkaaaEND\r\n"
+/* #define PAYLOAD "duafmnhwvfhshtkqtyuuujawsufsngvnopyvesdyvaoifzbviwrglaonrxkaaaEND\r\n" */
 // 256
 /* #define PAYLOAD "duafmnhwvfhshtkqtyuuujawsufsngvnopyvesdyvaoifzbviwrglaonrxkjfjiuduafmnhwvfhshtkqtyuuujawsufsngvnopyvesdyvaoifzbviwrglaonrxkjfjiuduafmnhwvfhshtkqtyuuujawsufsngvnopyvesdyvaoifzbviwrglaonrxkjfjiuduafmnhwvfhshtkqtyuuujawsufsngvnopyvesdyvaoifzbviwrglaonrxkaaaZ\n" */
 // 1024
@@ -278,19 +280,20 @@ void *worker_entry(void *_arg)
 	if (ret != 0) {
 		goto err;
 	}
+	INFO("Connected to server\n");
 #endif
 
 	/* NOTE: JUST TESTING the timestamp frame */
-	struct sockaddr_in client_addr;
-	socklen_t client_addr_len = sizeof(client_addr);
-	client_addr.sin_family = AF_INET;
-	client_addr.sin_port = htons(3030);
-	client_addr.sin_addr.s_addr = INADDR_ANY;
-	ret = bind(fd, (struct sockaddr *)&client_addr, client_addr_len);
-	if (ret != 0) {
-		ERROR("Failed to bind client port\n");
-		goto err;
-	}
+	/* struct sockaddr_in client_addr; */
+	/* socklen_t client_addr_len = sizeof(client_addr); */
+	/* client_addr.sin_family = AF_INET; */
+	/* client_addr.sin_port = htons(3030); */
+	/* client_addr.sin_addr.s_addr = INADDR_ANY; */
+	/* ret = bind(fd, (struct sockaddr *)&client_addr, client_addr_len); */
+	/* if (ret != 0) { */
+	/* 	ERROR("Failed to bind client port\n"); */
+	/* 	goto err; */
+	/* } */
 	/* --------------------------- */
 
 	buf = wrk->buf = malloc(BUFSIZE);
@@ -360,6 +363,7 @@ void *worker_entry(void *_arg)
 						/* Do not send */
 						poll_list[i].events = POLLIN;
 					} else {
+						usleep(1);
 						prepare_for_new_req(wrk, &poll_list[0]);
 					}
 					/* INFO("SEND\n"); */
