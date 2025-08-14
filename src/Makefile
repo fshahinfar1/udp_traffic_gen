@@ -4,7 +4,7 @@ CC := gcc
 CFLAGS := -g -O2 -I ./include/
 LINK := -lpthread
 
-SOURCE_FILES := udpgen.c log.c
+SOURCE_FILES := $(wildcard *.c)
 TARGET := ./build/udpgen
 
 
@@ -17,5 +17,5 @@ clean:
 ./build:
 	if [ ! -d ./build/ ]; then mkdir ./build; fi
 
-$(TARGET): ./build $(SOURCE_FILES)
+$(TARGET): ./build $(SOURCE_FILES) $(wildcard include/*.h)
 	$(CC) $(CFLAGS) $(SOURCE_FILES) $(LINK) -o $(TARGET)
